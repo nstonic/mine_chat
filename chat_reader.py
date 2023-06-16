@@ -11,10 +11,10 @@ async def listen_chat(host: str, port: int, to_file: str) -> NoReturn:
     reader, writer = await asyncio.open_connection(host, port)
 
     while True:
-        message = await reader.read(100)
+        message = await reader.read(512)
+        receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
+        message_text = message.decode(errors='ignore')
         async with aiofiles.open(to_file, mode='a', errors='ignore', encoding='utf8') as file:
-            receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
-            message_text = message.decode(errors='ignore')
             await file.write(f'[{receiving_time}] {message_text}')
 
 
