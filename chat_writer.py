@@ -1,24 +1,53 @@
 import argparse
 import asyncio
+import json
 import logging
+from asyncio import StreamWriter, StreamReader
 from datetime import datetime
+from typing import NoReturn
 
+from aioconsole import ainput
 from environs import Env
 
 
-async def send_message(host: str, port: int, chat_token: str, message_text: str) -> None:
-    reader, writer = await asyncio.open_connection(host, port)
-    answer = await reader.read(512)
-    if 'Enter your personal hash' in answer.decode(errors='ignore'):
-        writer.write(f'{chat_token}\n'.encode())
-        await writer.drain()
-    writer.write(f'{message_text}\n\n'.encode())
+async def submit_message(writer: StreamWriter) -> NoReturn:
+    message = await ainput('Введите сообщение:')
+    writer.write(f'{message}\n\n'.encode(errors='ignore'))
     await writer.drain()
     sending_time = datetime.now().strftime('%d.%m.%Y %H:%M')
-    logging.debug(f'[{sending_time}] {message_text}')
-    writer.close()
-    await writer.wait_closed()
-    return
+    logging.debug(f'Sending message [{sending_time}] {message}')
+    print('Сообщение отправлено')
+
+
+async def register(reader: StreamReader, writer: StreamWriter) -> None:
+    await reader.read(512)
+    nickname = await ainput('Неизвестный токен. Введите никнейм для регистрации нового:')
+    writer.write(f'{nickname}\n'.encode(errors='ignore'))
+    await writer.drain()
+    answer = await reader.read(512)
+    token = json.loads(answer.decode(errors='ignore')).get('account_hash')
+    print(f'Ваш новый токен: {token}\nСохраните его в файле .env')
+
+
+async def authorise(reader: StreamReader, writer: StreamWriter, chat_token: str) -> None:
+    answer = await reader.read(512)
+    if 'Enter your personal hash' in answer.decode(errors='ignore'):
+        writer.write(f'{chat_token}\n'.encode(errors='ignore'))
+        await writer.drain()
+        answer = await reader.read(512)
+        if json.loads(answer.decode(errors='ignore')) is None:
+            await register(reader, writer)
+
+
+async def start_chat(host: str, port: int, chat_token: str) -> None:
+    reader, writer = await asyncio.open_connection(host, port)
+    await authorise(reader, writer, chat_token)
+    try:
+        while True:
+            await submit_message(writer)
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
 def main():
@@ -36,10 +65,6 @@ def main():
         type=int,
         default=env.int('PORT', 5050),
         help='Host port'
-    )
-    parser.add_argument(
-        '--message',
-        help='Message for sending'
     )
     parser.add_argument(
         '--log_off',
@@ -62,12 +87,11 @@ def main():
         filename=args.log_filename
     )
 
-    asyncio.run(send_message(
-            host=args.host,
-            port=args.port,
-            message_text=args.message,
-            chat_token=env('CHAT_TOKEN')
-        ))
+    asyncio.run(start_chat(
+        host=args.host,
+        port=args.port,
+        chat_token=env('CHAT_TOKEN')
+    ))
 
 
 if __name__ == '__main__':
