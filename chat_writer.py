@@ -49,17 +49,16 @@ def print_report(answer: str) -> None:
 
 def get_action_func(
         response: str,
-        writer: StreamWriter,
         message: str,
         chat_token: str,
         nickname: str
 ) -> Optional[Callable]:
     if 'Enter preferred nickname below' in response:
-        return partial(register, writer=writer, nickname=nickname)
+        return partial(register, nickname=nickname)
     if 'Enter your personal hash' in response:
-        return partial(authorise, writer=writer, chat_token=chat_token)
+        return partial(authorise, chat_token=chat_token)
     if 'Post your message below' in response:
-        return partial(submit_message, writer=writer, message=message)
+        return partial(submit_message, message=message)
 
 
 async def send_message(
@@ -76,13 +75,12 @@ async def send_message(
             response = response.decode(errors='ignore')
             action = get_action_func(
                 response,
-                writer,
                 message,
                 chat_token,
                 nickname
             )
             if action:
-                message_sent = await action()
+                message_sent = await action(writer=writer)
                 if message_sent:
                     break
             else:
