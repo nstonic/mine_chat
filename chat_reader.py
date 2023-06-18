@@ -16,7 +16,6 @@ async def listen_chat(host: str, port: int, to_file: str) -> NoReturn:
         receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
         message_text = message.decode(errors='ignore')
         message_line = f'[{receiving_time}] {message_text}'
-        print(message_line, end='')
         async with aiofiles.open(to_file, mode='a', errors='ignore', encoding='utf8') as file:
             logging.debug(message_line)
             await file.write(message_line)
