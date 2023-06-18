@@ -7,7 +7,6 @@ from datetime import datetime
 from functools import partial
 from typing import NoReturn, Callable, Optional
 
-from aioconsole import ainput
 from environs import Env
 
 
@@ -23,7 +22,9 @@ async def submit_message(writer: StreamWriter, message: str) -> bool:
 
 async def register(writer: StreamWriter, nickname: str = None) -> None:
     if not nickname:
-        nickname = await ainput('Введите никнейм для регистрации:')
+        nickname = input('Введите никнейм для регистрации:')
+    else:
+        print(f'Регистрируемся под ником: {nickname}')
     nickname = nickname.replace('\n', ' ')
     writer.write(f'{nickname}\n'.encode(errors='ignore'))
     await writer.drain()
