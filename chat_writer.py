@@ -12,6 +12,7 @@ from environs import Env
 
 async def submit_message(writer: StreamWriter) -> NoReturn:
     message = await ainput('Введите сообщение:')
+    message = message.replace('\n', ' ')
     writer.write(f'{message}\n\n'.encode(errors='ignore'))
     await writer.drain()
     sending_time = datetime.now().strftime('%d.%m.%Y %H:%M')
@@ -20,8 +21,8 @@ async def submit_message(writer: StreamWriter) -> NoReturn:
 
 
 async def register(reader: StreamReader, writer: StreamWriter) -> None:
-    await reader.read(512)
-    nickname = await ainput('Неизвестный токен. Введите никнейм для регистрации нового:')
+    nickname = await ainput('Введите никнейм для регистрации:')
+    nickname = nickname.replace('\n', ' ')
     writer.write(f'{nickname}\n'.encode(errors='ignore'))
     await writer.drain()
     answer = await reader.read(512)
@@ -36,6 +37,8 @@ async def authorise(reader: StreamReader, writer: StreamWriter, chat_token: str)
         await writer.drain()
         answer = await reader.read(512)
         if json.loads(answer.decode(errors='ignore')) is None:
+            await reader.read(512)
+            print('Неизвестный токен.', end='')
             await register(reader, writer)
 
 
