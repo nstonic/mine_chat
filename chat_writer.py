@@ -11,25 +11,17 @@ from aioconsole import ainput
 from environs import Env
 
 
-async def submit_message(
-        writer: StreamWriter,
-        message: str
-) -> NoReturn:
+async def submit_message(writer: StreamWriter, message: str) -> bool:
     message = message.replace('\n', ' ')
     writer.write(f'{message}\n\n'.encode(errors='ignore'))
     await writer.drain()
     sending_time = datetime.now().strftime('%d.%m.%Y %H:%M')
     logging.debug(f'Sending message [{sending_time}] {message}')
     print('Сообщение отправлено')
-    writer.close()
-    await writer.wait_closed()
-    exit()
+    return True
 
 
-async def register(
-        writer: StreamWriter,
-        nickname: str = None
-) -> None:
+async def register(writer: StreamWriter, nickname: str = None) -> None:
     if not nickname:
         nickname = await ainput('Введите никнейм для регистрации:')
     nickname = nickname.replace('\n', ' ')
@@ -37,45 +29,36 @@ async def register(
     await writer.drain()
 
 
-async def authorise(
-        writer: StreamWriter,
-        chat_token: str,
-) -> None:
+async def authorise(writer: StreamWriter, chat_token: str, ) -> None:
     writer.write(f'{chat_token}\n'.encode(errors='ignore'))
     await writer.drain()
 
 
-async def print_unknown_token() -> None:
-    print('Неизвестный токен.')
-
-
-async def print_new_token(token: str) -> None:
-    print(f'Ваш новый токен: {token}\nСохраните его в файле .env')
-
-
-def get_action_func(
-        answer: str,
-        writer: StreamWriter,
-        message: str,
-        chat_token: str,
-        nickname: str
-) -> Optional[Callable]:
-    if 'Enter preferred nickname below' in answer:
-        return partial(register, writer=writer, nickname=nickname)
-    if 'Enter your personal hash' in answer:
-        return partial(authorise, writer=writer, chat_token=chat_token)
-    if 'Post your message below' in answer:
-        return partial(submit_message, writer=writer, message=message)
-
+def print_report(answer: str) -> None:
     try:
         answer_obj = json.loads(answer)
     except json.decoder.JSONDecodeError:
         return
     else:
         if answer_obj is None:
-            return print_unknown_token
+            print('Неизвестный токен.')
         elif token := answer_obj.get('account_hash'):
-            return partial(print_new_token, token=token)
+            print(f'Ваш токен: {token}\nСохраните его в файле .env')
+
+
+def get_action_func(
+        response: str,
+        writer: StreamWriter,
+        message: str,
+        chat_token: str,
+        nickname: str
+) -> Optional[Callable]:
+    if 'Enter preferred nickname below' in response:
+        return partial(register, writer=writer, nickname=nickname)
+    if 'Enter your personal hash' in response:
+        return partial(authorise, writer=writer, chat_token=chat_token)
+    if 'Post your message below' in response:
+        return partial(submit_message, writer=writer, message=message)
 
 
 async def send_message(
@@ -84,19 +67,25 @@ async def send_message(
         chat_token: str,
         message: str,
         nickname: str
-) -> None:
+) -> NoReturn:
     reader, writer = await asyncio.open_connection(host, port)
     try:
         while True:
-            answer = await reader.read(512)
-            if action := get_action_func(
-                    answer.decode(errors='ignore'),
-                    writer,
-                    message,
-                    chat_token,
-                    nickname
-            ):
-                await action()
+            response = await reader.read(512)
+            response = response.decode(errors='ignore')
+            action = get_action_func(
+                response,
+                writer,
+                message,
+                chat_token,
+                nickname
+            )
+            if action:
+                message_sent = await action()
+                if message_sent:
+                    break
+            else:
+                print_report(response)
     finally:
         writer.close()
         await writer.wait_closed()
