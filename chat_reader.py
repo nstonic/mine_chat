@@ -49,7 +49,7 @@ def main():
     )
     parser.add_argument(
         '--log_filename',
-        default=env('LOG_FILENAME', default='server.log'),
+        default=env('LOG_FILENAME', default='chat.log'),
         help='Set log file name'
     )
     args = parser.parse_args()
