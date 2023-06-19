@@ -21,10 +21,10 @@ async def submit_message(writer: StreamWriter, message: str) -> bool:
 
 
 async def register(writer: StreamWriter, nickname: str = None) -> None:
-    if not nickname:
-        nickname = input('Введите никнейм для регистрации:')
-    else:
+    if nickname:
         print(f'Регистрируемся под ником: {nickname}')
+    else:
+        nickname = input('Введите никнейм для регистрации:')
     nickname = nickname.replace('\n', ' ')
     writer.write(f'{nickname}\n'.encode(errors='ignore'))
     await writer.drain()
@@ -35,15 +35,15 @@ async def authorise(writer: StreamWriter, chat_token: str, ) -> None:
     await writer.drain()
 
 
-def print_report(answer: str) -> None:
+def print_report(response: str) -> None:
     try:
-        answer_obj = json.loads(answer)
+        response_obj = json.loads(response)
     except json.decoder.JSONDecodeError:
         return
     else:
-        if answer_obj is None:
+        if response_obj is None:
             print('Неизвестный токен.')
-        elif token := answer_obj.get('account_hash'):
+        elif token := response_obj.get('account_hash'):
             print(f'Ваш токен: {token}\nСохраните его в файле .env')
 
 
