@@ -10,15 +10,21 @@ from environs import Env
 
 async def listen_chat(host: str, port: int, to_file: str) -> NoReturn:
     reader, writer = await asyncio.open_connection(host, port)
-
-    while True:
-        message = await reader.read(512)
-        receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
-        message_text = message.decode(errors='ignore')
-        message_line = f'[{receiving_time}] {message_text}'
-        async with aiofiles.open(to_file, mode='a', errors='ignore', encoding='utf8') as file:
-            logging.debug(message_line)
-            await file.write(message_line)
+    try:
+        while True:
+            message = await reader.read(512)
+            if not message:
+                raise ConnectionError
+            receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
+            message_text = message.decode(errors='ignore')
+            message_line = f'[{receiving_time}] {message_text}'
+            print(message_line)
+            async with aiofiles.open(to_file, mode='a', errors='ignore', encoding='utf8') as file:
+                logging.debug(message_line)
+                await file.write(message_line)
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
 def main():
@@ -57,16 +63,21 @@ def main():
     logging.disable(
         args.log_off or env.bool('LOG_OFF', default=False)
     )
-
     logging.basicConfig(
         level=logging.DEBUG,
         filename=args.log_filename
     )
-    asyncio.run(listen_chat(
-        host=args.host,
-        port=args.port,
-        to_file=args.to_file,
-    ))
+
+    while True:
+        try:
+            asyncio.run(listen_chat(
+                host=args.host,
+                port=args.port,
+                to_file=args.to_file,
+            ))
+        except Exception:
+            continue
+
 
 
 if __name__ == '__main__':
