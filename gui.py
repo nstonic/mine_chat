@@ -1,5 +1,6 @@
 import tkinter as tk
 import asyncio
+from contextlib import suppress
 from tkinter.scrolledtext import ScrolledText
 from enum import Enum
 
@@ -50,9 +51,10 @@ async def update_tk(root_frame, interval=1 / 120):
 
 
 async def update_conversation_history(panel, messages_queue, history_filepath):
-    async with aiofiles.open(history_filepath, mode='w+', errors='ignore', encoding='utf8') as file:
-        history = await file.read()
-    panel.insert('insert', history.strip())
+    with suppress(FileNotFoundError):
+        async with aiofiles.open(history_filepath, mode='r', errors='ignore', encoding='utf8') as file:
+            history = await file.read()
+            panel.insert('insert', history.strip())
     while True:
         msg = await messages_queue.get()
 

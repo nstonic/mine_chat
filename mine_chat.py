@@ -16,7 +16,7 @@ class MineChat:
             host: str,
             reading_port: int,
             sending_port: int,
-            token,
+            token: str,
             history_file: str,
     ):
         self._host = host
