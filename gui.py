@@ -1,7 +1,10 @@
 import tkinter as tk
 import asyncio
+from asyncio import StreamWriter
 from tkinter.scrolledtext import ScrolledText
 from enum import Enum
+
+import aiofiles
 
 
 class TkAppClosed(Exception):
@@ -47,7 +50,10 @@ async def update_tk(root_frame, interval=1 / 120):
         await asyncio.sleep(interval)
 
 
-async def update_conversation_history(panel, messages_queue):
+async def update_conversation_history(panel, messages_queue, history_filepath):
+    async with aiofiles.open(history_filepath, mode='r', errors='ignore', encoding='utf8') as file:
+        history = await file.read()
+    panel.insert('insert', history.strip())
     while True:
         msg = await messages_queue.get()
 
@@ -97,10 +103,10 @@ def create_status_panel(root_frame):
     status_write_label = tk.Label(connections_frame, height=1, fg='grey', font='arial 10', anchor='w')
     status_write_label.pack(side="top", fill=tk.X)
 
-    return (nickname_label, status_read_label, status_write_label)
+    return nickname_label, status_read_label, status_write_label
 
 
-async def draw(messages_queue, sending_queue, status_updates_queue):
+async def draw(messages_queue, sending_queue, status_updates_queue, history_file):
     root = tk.Tk()
 
     root.title('Чат Майнкрафтера')
@@ -128,6 +134,6 @@ async def draw(messages_queue, sending_queue, status_updates_queue):
 
     await asyncio.gather(
         update_tk(root_frame),
-        update_conversation_history(conversation_panel, messages_queue),
+        update_conversation_history(conversation_panel, messages_queue, history_file),
         update_status_panel(status_labels, status_updates_queue)
     )
