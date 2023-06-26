@@ -50,7 +50,7 @@ async def update_tk(root_frame, interval=1 / 120):
 
 
 async def update_conversation_history(panel, messages_queue, history_filepath):
-    async with aiofiles.open(history_filepath, mode='r', errors='ignore', encoding='utf8') as file:
+    async with aiofiles.open(history_filepath, mode='w+', errors='ignore', encoding='utf8') as file:
         history = await file.read()
     panel.insert('insert', history.strip())
     while True:
