@@ -1,6 +1,5 @@
 import tkinter as tk
 import asyncio
-from asyncio import StreamWriter
 from tkinter.scrolledtext import ScrolledText
 from enum import Enum
 

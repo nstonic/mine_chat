@@ -10,7 +10,10 @@ from environs import Env
 import gui
 
 
-async def save_messages(saving_history_queue: asyncio.Queue, filepath: str):
+async def save_messages(
+        saving_history_queue: asyncio.Queue,
+        filepath: str
+) -> NoReturn:
     while True:
         messages_line = await saving_history_queue.get()
         async with aiofiles.open(filepath, mode='a', errors='ignore', encoding='utf8') as file:
@@ -33,22 +36,23 @@ async def read_msgs(
             saving_history_queue.put_nowait(message_line)
 
 
-async def submit_messages(writer: StreamWriter, sending_queue: asyncio.Queue) -> None:
+async def submit_msgs(
+        writer: StreamWriter,
+        sending_queue: asyncio.Queue
+) -> NoReturn:
     while True:
         message = await sending_queue.get()
         message = message.replace('\n', ' ')
         writer.write(f'{message}\n\n'.encode(errors='ignore'))
         await writer.drain()
-        # sending_time = datetime.now().strftime('%d.%m.%Y %H:%M')
-        # logging.debug(f'Sending message [{sending_time}] {message}')
 
 
-async def authorise(writer: StreamWriter, token: str, ) -> None:
+async def authorise(writer: StreamWriter, token: str) -> None:
     writer.write(f'{token}\n'.encode(errors='ignore'))
     await writer.drain()
 
 
-async def handle_sending_msg(
+async def handle_server_responses(
         host: str,
         sending_port: str,
         token: str,
@@ -62,7 +66,7 @@ async def handle_sending_msg(
             if 'Enter your personal hash' in response_text:
                 await authorise(writer, token)
             elif 'Post your message below' in response_text:
-                await submit_messages(writer, sending_queue)
+                await submit_msgs(writer, sending_queue)
             else:
                 print(response_text)
     finally:
@@ -72,11 +76,6 @@ async def handle_sending_msg(
 
 async def main():
     args = get_args()
-    # logging.basicConfig(
-    #     level=logging.DEBUG,
-    #     filename=args.log_filename
-    # )
-    # logging.disable(args.log_off)
 
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
@@ -87,7 +86,7 @@ async def main():
         save_messages(saving_history_queue, args.history_file),
         read_msgs(messages_queue, saving_history_queue, args.host, args.reading_port),
         gui.draw(messages_queue, sending_queue, status_updates_queue, args.history_file),
-        handle_sending_msg(args.host, args.sending_port, args.token, sending_queue)
+        handle_server_responses(args.host, args.sending_port, args.token, sending_queue)
     )
 
 
@@ -123,18 +122,7 @@ def get_args():
         default=env('HISTORY_FILE', 'history.txt'),
         help='File path for saving chat history'
     )
-    # parser.add_argument(
-    #     '--log_off',
-    #     action='store_false',
-    #     help='Disable logging'
-    # )
-    # parser.add_argument(
-    #     '--log_filename',
-    #     default=env('LOG_FILENAME', default='chat.log'),
-    #     help='Set log file name'
-    # )
     args = parser.parse_args()
-    # args.log_off = args.log_off or env.bool('LOG_OFF', default=False)
     return args
 
 
