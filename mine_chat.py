@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from contextlib import suppress
 from datetime import datetime
 from enum import Enum
@@ -7,6 +8,8 @@ from tkinter import messagebox
 from typing import NoReturn
 
 import aiofiles
+
+queue_logger = logging.getLogger('Queue_logger')
 
 
 class MineChat:
@@ -19,39 +22,48 @@ class MineChat:
             token: str,
             history_file: str,
     ):
-        self.history_file = history_file
+        self._history_file = history_file
         self._host = host
         self._listening_port = reading_port
         self._sending_port = sending_port
         self._token = token
 
         self.messages_queue = asyncio.Queue()
+        self.saving_history_queue = asyncio.Queue()
         self.sending_queue = asyncio.Queue()
         self.status_updates_queue = asyncio.Queue()
-        self.saving_history_queue = asyncio.Queue()
+        self.watchdog_queue = asyncio.Queue()
 
         self._listener = None
-        self._writer = None
         self._reader = None
+        self._writer = None
 
     async def run(self) -> NoReturn:
         await asyncio.gather(
-            self.save_msgs(),
+            self.watch_for_connection(),
             self.listen_chat(),
-            self.sending_msgs()
+            self.sending_msgs(),
+            self.save_msgs()
         )
+
+    @property
+    def history_file(self):
+        return self._history_file
 
     async def authorise(self) -> None:
         self._writer.write(f'{self._token}\n'.encode(errors='ignore'))
         await self._writer.drain()
+        queue_logger.debug('Connection is alive. Source: Sending authorization token')
 
     def check_auth(self, response_text: str) -> None:
         json_raw, *_ = response_text.split('\n')
         with suppress(json.decoder.JSONDecodeError):
             response_obj = json.loads(json_raw)
             if response_obj is None:
+                queue_logger.debug('Connection is alive. Source: Invalid token')
                 raise InvalidToken
             elif nickname := response_obj.get('nickname'):
+                queue_logger.debug('Connection is alive. Source: Authorization done')
                 self.status_updates_queue.put_nowait(
                     NicknameReceived(nickname)
                 )
@@ -82,32 +94,28 @@ class MineChat:
             )
             self._listener, writer = await asyncio.open_connection(self._host, self._listening_port)
             try:
-                while True:
-                    await self.read_msgs()
-            except ConnectionError:
-                self.status_updates_queue.put_nowait(
-                    ReadConnectionStateChanged.CLOSED
-                )
-                await asyncio.sleep(5)
+                await self.read_msgs()
             finally:
                 writer.close()
                 await writer.wait_closed()
 
     async def read_msgs(self) -> None:
-        message = await self._listener.read(512)
-        self.status_updates_queue.put_nowait(
-            ReadConnectionStateChanged.ESTABLISHED
-        )
-        if message_text := message.decode(errors='ignore').strip():
-            receiving_time = datetime.now().strftime('%d.%m.%Y %H:%M')
-            message_line = f'[{receiving_time}] {message_text}'
-            self.messages_queue.put_nowait(message_line)
-            self.saving_history_queue.put_nowait(message_line)
+        while True:
+            message = await self._listener.read(512)
+            self.status_updates_queue.put_nowait(
+                ReadConnectionStateChanged.ESTABLISHED
+            )
+            if message_text := message.decode(errors='ignore').strip():
+                receiving_time = datetime.now().strftime('%d.%m.%y %H:%M:%S')
+                message_line = f'[{receiving_time}] {message_text}'
+                self.messages_queue.put_nowait(message_line)
+                self.saving_history_queue.put_nowait(message_line)
+                queue_logger.debug('Connection is alive. Source: Message received')
 
     async def save_msgs(self) -> NoReturn:
         while True:
             messages_line = await self.saving_history_queue.get()
-            async with aiofiles.open(self.history_file, mode='a', errors='ignore', encoding='utf8') as file:
+            async with aiofiles.open(self._history_file, mode='a', errors='ignore', encoding='utf8') as file:
                 await file.write(messages_line + '\n')
 
     async def sending_msgs(self) -> NoReturn:
@@ -124,11 +132,6 @@ class MineChat:
                 )
                 messagebox.showerror('Неверный токен', str(ex))
                 break
-            except ConnectionError:
-                self.status_updates_queue.put_nowait(
-                    SendingConnectionStateChanged.CLOSED
-                )
-                await asyncio.sleep(5)
             finally:
                 self._writer.close()
                 await self._writer.wait_closed()
@@ -139,6 +142,18 @@ class MineChat:
             message = message.replace('\n', ' ')
             self._writer.write(f'{message}\n\n'.encode(errors='ignore'))
             await self._writer.drain()
+            queue_logger.debug('Connection is alive. Source: Message sent')
+
+    async def watch_for_connection(self):
+        while True:
+            try:
+                async with asyncio.timeout(2):
+                    log = await self.watchdog_queue.get()
+                    print(log)
+            except TimeoutError:
+                queue_logger.debug('Timeout error')
+                log = await self.watchdog_queue.get()
+                print(log)
 
 
 class InvalidToken(Exception):
@@ -167,3 +182,16 @@ class SendingConnectionStateChanged(Enum):
 class NicknameReceived:
     def __init__(self, nickname):
         self.nickname = nickname
+
+
+class QueueLoggerHandler(logging.Handler):
+
+    def __init__(self, queue: asyncio.Queue):
+        super().__init__()
+        self.queue = queue
+        self.formatter = logging.Formatter(fmt='[%(asctime)s] %(message)s')
+
+    def emit(self, record):
+        self.queue.put_nowait(
+            self.format(record)
+        )
