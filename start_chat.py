@@ -1,6 +1,6 @@
 import argparse
-import asyncio
 
+from anyio import run
 from environs import Env
 
 import gui
@@ -52,7 +52,7 @@ def main():
         token=args.token,
         history_file=args.history_file
     )
-    asyncio.run(gui.draw(chat))
+    run(gui.draw, chat)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,9 @@ from enum import Enum
 from typing import NoReturn
 
 import aiofiles
+from anyio import create_task_group
+
+from errors import InvalidToken, retry_on_network_error
 
 
 class MineChat:
@@ -35,9 +38,8 @@ class MineChat:
         self._writer = None
 
     async def run(self) -> NoReturn:
-        await asyncio.gather(
-            self.handle_connection()
-        )
+        async with create_task_group() as tg:
+            tg.start_soon(self.handle_connection)
 
     @property
     def history_file(self):
@@ -61,7 +63,8 @@ class MineChat:
                     NicknameReceived(nickname)
                 )
 
-    async def handle_connection(self) -> NoReturn:
+    @retry_on_network_error
+    async def handle_connection(self):
         self.status_updates_queue.put_nowait(
             ReadConnectionStateChanged.INITIATED
         )
@@ -75,12 +78,11 @@ class MineChat:
             self.status_updates_queue.put_nowait(
                 SendingConnectionStateChanged.ESTABLISHED
             )
-            await asyncio.gather(
-                self.watch_for_connection(),
-                self.listen_chat(),
-                self.save_msgs(),
-                self.sending_msgs()
-            )
+            async with create_task_group() as tg:
+                tg.start_soon(self.listen_chat)
+                tg.start_soon(self.save_msgs)
+                tg.start_soon(self.send_msgs)
+                tg.start_soon(self.watch_for_connection)
 
     async def listen_chat(self) -> NoReturn:
         while True:
@@ -95,7 +97,7 @@ class MineChat:
                 self.saving_history_queue.put_nowait(message_line)
                 self.watchdog_queue.put_nowait('Connection is alive. Source: Message received')
 
-    async def log_on(self) -> NoReturn:
+    async def log_on(self) -> bool:
         waiting_for_auth_result = False
         while True:
             response = await self._reader.read(512)
@@ -120,29 +122,28 @@ class MineChat:
             async with aiofiles.open(self._history_file, mode='a', errors='ignore', encoding='utf8') as file:
                 await file.write(messages_line + '\n')
 
-    async def sending_msgs(self) -> NoReturn:
+    async def send_msgs(self) -> NoReturn:
         while True:
             message = await self.sending_queue.get()
-            message = message.replace('\n', ' ')
-            self._writer.write(f'{message}\n\n'.encode(errors='ignore'))
-            await self._writer.drain()
-            self.watchdog_queue.put_nowait('Connection is alive. Source: Message sent')
+            if message_text := message.strip():
+                message = message_text.replace('\n', ' ')
+                self._writer.write(f'{message}\n\n'.encode(errors='ignore'))
+                await self._writer.drain()
+                self.watchdog_queue.put_nowait('Connection is alive. Source: Message sent')
 
     async def watch_for_connection(self):
         while True:
             try:
                 async with asyncio.timeout(4):
-                    log = await self.watchdog_queue.get()
-                    print(log)
+                    await self.watchdog_queue.get()
             except TimeoutError:
-                self.watchdog_queue.put_nowait('Timeout error')
-                log = await self.watchdog_queue.get()
-                print(log)
-
-
-class InvalidToken(Exception):
-    def __str__(self):
-        return 'Проверьте токен. сервер его не узнал'
+                self.status_updates_queue.put_nowait(
+                    SendingConnectionStateChanged.CLOSED
+                )
+                self.status_updates_queue.put_nowait(
+                    ReadConnectionStateChanged.CLOSED
+                )
+                raise ConnectionError
 
 
 class ReadConnectionStateChanged(Enum):
