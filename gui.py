@@ -1,11 +1,12 @@
 import tkinter as tk
 import asyncio
 from contextlib import suppress
+from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import aiofiles
 
-from mine_chat import ReadConnectionStateChanged, SendingConnectionStateChanged, NicknameReceived
+from mine_chat import ReadConnectionStateChanged, SendingConnectionStateChanged, NicknameReceived, InvalidToken
 
 
 class TkAppClosed(Exception):
@@ -111,9 +112,12 @@ async def draw(chat):
     conversation_panel = ScrolledText(root_frame, wrap='none')
     conversation_panel.pack(side="top", fill="both", expand=True)
 
-    await asyncio.gather(
-        chat.run(),
-        update_tk(root_frame),
-        update_conversation_history(conversation_panel, chat.messages_queue, chat.history_file),
-        update_status_panel(status_labels, chat.status_updates_queue)
-    )
+    try:
+        await asyncio.gather(
+            chat.run(),
+            update_tk(root_frame),
+            update_conversation_history(conversation_panel, chat.messages_queue, chat.history_file),
+            update_status_panel(status_labels, chat.status_updates_queue)
+        )
+    except InvalidToken as ex:
+        messagebox.showerror('Неверный токен', str(ex))

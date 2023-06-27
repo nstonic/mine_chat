@@ -1,13 +1,10 @@
 import argparse
 import asyncio
-import logging
 
 from environs import Env
 
 import gui
-from mine_chat import MineChat, QueueLoggerHandler
-
-queue_logger = logging.getLogger('Queue_logger')
+from mine_chat import MineChat
 
 
 def get_args():
@@ -55,13 +52,6 @@ def main():
         token=args.token,
         history_file=args.history_file
     )
-    queue_logger.setLevel(
-        level=logging.DEBUG
-    )
-    queue_logger.setLevel(logging.DEBUG)
-    queue_logger.addHandler(QueueLoggerHandler(
-        queue=chat.watchdog_queue
-    ))
     asyncio.run(gui.draw(chat))
 
 
