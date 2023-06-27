@@ -2,36 +2,14 @@ import tkinter as tk
 import asyncio
 from contextlib import suppress
 from tkinter.scrolledtext import ScrolledText
-from enum import Enum
 
 import aiofiles
+
+from mine_chat import ReadConnectionStateChanged, SendingConnectionStateChanged, NicknameReceived
 
 
 class TkAppClosed(Exception):
     pass
-
-
-class ReadConnectionStateChanged(Enum):
-    INITIATED = 'устанавливаем соединение'
-    ESTABLISHED = 'соединение установлено'
-    CLOSED = 'соединение закрыто'
-
-    def __str__(self):
-        return str(self.value)
-
-
-class SendingConnectionStateChanged(Enum):
-    INITIATED = 'устанавливаем соединение'
-    ESTABLISHED = 'соединение установлено'
-    CLOSED = 'соединение закрыто'
-
-    def __str__(self):
-        return str(self.value)
-
-
-class NicknameReceived:
-    def __init__(self, nickname):
-        self.nickname = nickname
 
 
 def process_new_message(input_field, sending_queue):
@@ -107,7 +85,7 @@ def create_status_panel(root_frame):
     return nickname_label, status_read_label, status_write_label
 
 
-async def draw(messages_queue, sending_queue, status_updates_queue, history_file):
+async def draw(chat):
     root = tk.Tk()
 
     root.title('Чат Майнкрафтера')
@@ -123,18 +101,19 @@ async def draw(messages_queue, sending_queue, status_updates_queue, history_file
     input_field = tk.Entry(input_frame)
     input_field.pack(side="left", fill=tk.X, expand=True)
 
-    input_field.bind("<Return>", lambda event: process_new_message(input_field, sending_queue))
+    input_field.bind("<Return>", lambda event: process_new_message(input_field, chat.sending_queue))
 
     send_button = tk.Button(input_frame)
     send_button["text"] = "Отправить"
-    send_button["command"] = lambda: process_new_message(input_field, sending_queue)
+    send_button["command"] = lambda: process_new_message(input_field, chat.sending_queue)
     send_button.pack(side="left")
 
     conversation_panel = ScrolledText(root_frame, wrap='none')
     conversation_panel.pack(side="top", fill="both", expand=True)
 
     await asyncio.gather(
+        chat.run(),
         update_tk(root_frame),
-        update_conversation_history(conversation_panel, messages_queue, history_file),
-        update_status_panel(status_labels, status_updates_queue)
+        update_conversation_history(conversation_panel, chat.messages_queue, chat.history_file),
+        update_status_panel(status_labels, chat.status_updates_queue)
     )

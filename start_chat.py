@@ -3,6 +3,7 @@ import asyncio
 
 from environs import Env
 
+import gui
 from mine_chat import MineChat
 
 
@@ -51,7 +52,7 @@ def main():
         token=args.token,
         history_file=args.history_file
     )
-    asyncio.run(chat.run())
+    asyncio.run(gui.draw(chat))
 
 
 if __name__ == '__main__':
