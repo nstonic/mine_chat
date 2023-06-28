@@ -72,8 +72,8 @@ class MineChat:
                 raise InvalidToken('Неверный токен')
             elif nickname := response_obj.get('nickname'):
                 if not self._token:
-                    self._token = response_obj.get('account_hash')
-                    self.show_token_queue.put_nowait(self._token)
+                    token = response_obj.get('account_hash')
+                    self.show_token_queue.put_nowait(token)
                 self.watchdog_queue.put_nowait(True)
                 self.status_updates_queue.put_nowait(
                     NicknameReceived(nickname)
