@@ -1,8 +1,11 @@
 import asyncio
 import json
+import sys
 from asyncio import StreamReader, StreamWriter
+from contextlib import suppress
 from datetime import datetime
 from enum import Enum
+from json import JSONDecodeError
 from typing import NoReturn, Optional
 
 import aiofiles
@@ -48,19 +51,23 @@ class MineChat:
     async def authorise(self) -> None:
         self._sender.write(f'{self._token}\n'.encode(errors='ignore'))
         await self._sender.drain()
-        self.watchdog_queue.put_nowait('Connection is alive. Source: Sending authorization token')
+        this_func_name = sys._getframe().f_code.co_name
+        self.watchdog_queue.put_nowait(this_func_name)
 
     def check_auth(self, response_text: str) -> Optional[bool]:
-        response_obj = json.loads(response_text)
-        if response_obj is None:
-            self.watchdog_queue.put_nowait('Connection is alive. Source: Invalid token')
-            raise InvalidToken
-        elif nickname := response_obj.get('nickname'):
-            self.watchdog_queue.put_nowait('Connection is alive. Source: Authorization done')
-            self.status_updates_queue.put_nowait(
-                NicknameReceived(nickname)
-            )
-            return True
+        with suppress(JSONDecodeError):
+            response_obj = json.loads(response_text)
+            if response_obj is None:
+                this_func_name = sys._getframe().f_code.co_name
+                self.watchdog_queue.put_nowait(this_func_name)
+                raise InvalidToken
+            elif nickname := response_obj.get('nickname'):
+                this_func_name = sys._getframe().f_code.co_name
+                self.watchdog_queue.put_nowait(this_func_name)
+                self.status_updates_queue.put_nowait(
+                    NicknameReceived(nickname)
+                )
+                return True
 
     @retry_on_network_error
     async def handle_connection(self):
@@ -81,14 +88,15 @@ class MineChat:
                 tg.start_soon(self.listen_chat)
                 tg.start_soon(self.save_msgs)
                 tg.start_soon(self.send_msgs)
-                tg.start_soon(self.ping)
+                tg.start_soon(self.ping_pong)
                 tg.start_soon(self.watch_for_connection)
 
     async def listen_chat(self) -> NoReturn:
         while True:
             message = await self._listener.read(512)
             if message:
-                self.watchdog_queue.put_nowait('Connection is alive. Source: Message received')
+                this_func_name = sys._getframe().f_code.co_name
+                self.watchdog_queue.put_nowait(this_func_name)
                 self.status_updates_queue.put_nowait(
                     ReadConnectionStateChanged.ESTABLISHED
                 )
@@ -105,8 +113,6 @@ class MineChat:
         while True:
             response = await self._reader.readline()
             response_text = response.decode(errors='ignore')
-            if not response_text.strip():
-                continue
             self.status_updates_queue.put_nowait(
                 SendingConnectionStateChanged.ESTABLISHED
             )
@@ -119,11 +125,12 @@ class MineChat:
             if 'Post your message below' in response_text:
                 return True
 
-    async def ping(self) -> NoReturn:
+    async def ping_pong(self) -> NoReturn:
         while True:
             self.sending_queue.put_nowait('')
             await self._reader.readline()
-            self.watchdog_queue.put_nowait('pong')
+            this_func_name = sys._getframe().f_code.co_name
+            self.watchdog_queue.put_nowait(this_func_name)
             await asyncio.sleep(2)
 
     async def save_msgs(self) -> NoReturn:
@@ -138,13 +145,15 @@ class MineChat:
             message = message.replace('\n', ' ')
             self._sender.write(f'{message}\n\n'.encode(errors='ignore'))
             await self._sender.drain()
-            self.watchdog_queue.put_nowait('Connection is alive. Source: Message sent')
+            this_func_name = sys._getframe().f_code.co_name
+            self.watchdog_queue.put_nowait(this_func_name)
 
     async def watch_for_connection(self):
         while True:
             try:
                 async with asyncio.timeout(3):
-                    print(await self.watchdog_queue.get())
+                    source = await self.watchdog_queue.get()
+                    print(f'Connection is alive. Source: {source}')
             except TimeoutError:
                 self.status_updates_queue.put_nowait(
                     SendingConnectionStateChanged.CLOSED
