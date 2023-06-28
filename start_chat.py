@@ -5,7 +5,7 @@ from anyio import run
 from anyio._backends._asyncio import ExceptionGroup
 from environs import Env
 
-from gui import draw, TkAppClosed
+from gui import draw_main, TkAppClosed
 from mine_chat import MineChat
 
 
@@ -55,7 +55,7 @@ def main():
         history_file=args.history_file
     )
     try:
-        run(draw, chat)
+        run(draw_main, chat)
     except (ExceptionGroup, TclError, KeyboardInterrupt):
         pass
     finally:

@@ -6,8 +6,7 @@ from anyio import ExceptionGroup
 
 
 class InvalidToken(Exception):
-    def __str__(self):
-        return 'Проверьте токен. сервер его не узнал'
+    pass
 
 
 def retry_on_network_error(func):
@@ -18,4 +17,5 @@ def retry_on_network_error(func):
             except (ConnectionError, gaierror, ExceptionGroup):
                 await asyncio.sleep(5)
                 continue
+
     return wrapper

@@ -1,6 +1,5 @@
 import asyncio
 import json
-import sys
 from asyncio import StreamReader, StreamWriter
 from contextlib import suppress
 from datetime import datetime
@@ -34,6 +33,8 @@ class MineChat:
         self.saving_history_queue = asyncio.Queue()
         self.sending_queue = asyncio.Queue()
         self.status_updates_queue = asyncio.Queue()
+        self.nickname_queue = asyncio.Queue()
+        self.show_token_queue = asyncio.Queue()
         self.watchdog_queue = asyncio.Queue()
 
         self._listener: Optional[StreamReader] = None
@@ -44,26 +45,35 @@ class MineChat:
         async with create_task_group() as tg:
             tg.start_soon(self.handle_connection)
 
+    async def register_new_user(self):
+        self._token = ''
+        await self.log_on()
+
     @property
     def history_file(self):
         return self._history_file
 
+    async def send_nickname(self) -> None:
+        nickname = await self.nickname_queue.get()
+        self._sender.write(f'{nickname}\n'.encode(errors='ignore'))
+        await self._sender.drain()
+
     async def authorise(self) -> None:
         self._sender.write(f'{self._token}\n'.encode(errors='ignore'))
         await self._sender.drain()
-        this_func_name = sys._getframe().f_code.co_name
-        self.watchdog_queue.put_nowait(this_func_name)
+        self.watchdog_queue.put_nowait(True)
 
     def check_auth(self, response_text: str) -> Optional[bool]:
         with suppress(JSONDecodeError):
             response_obj = json.loads(response_text)
             if response_obj is None:
-                this_func_name = sys._getframe().f_code.co_name
-                self.watchdog_queue.put_nowait(this_func_name)
-                raise InvalidToken
+                self.watchdog_queue.put_nowait(True)
+                raise InvalidToken('Неверный токен')
             elif nickname := response_obj.get('nickname'):
-                this_func_name = sys._getframe().f_code.co_name
-                self.watchdog_queue.put_nowait(this_func_name)
+                if not self._token:
+                    self._token = response_obj.get('account_hash')
+                    self.show_token_queue.put_nowait(self._token)
+                self.watchdog_queue.put_nowait(True)
                 self.status_updates_queue.put_nowait(
                     NicknameReceived(nickname)
                 )
@@ -95,8 +105,7 @@ class MineChat:
         while True:
             message = await self._listener.read(512)
             if message:
-                this_func_name = sys._getframe().f_code.co_name
-                self.watchdog_queue.put_nowait(this_func_name)
+                self.watchdog_queue.put_nowait(True)
                 self.status_updates_queue.put_nowait(
                     ReadConnectionStateChanged.ESTABLISHED
                 )
@@ -109,6 +118,8 @@ class MineChat:
                 self.saving_history_queue.put_nowait(message_line)
 
     async def log_on(self) -> bool:
+        if self._token is None:
+            raise InvalidToken('Отсутствует токен')
         waiting_for_auth_result = False
         while True:
             response = await self._reader.readline()
@@ -122,6 +133,9 @@ class MineChat:
             if 'Enter your personal hash' in response_text:
                 await self.authorise()
                 waiting_for_auth_result = True
+            if 'Enter preferred nickname below' in response_text:
+                await self.send_nickname()
+                waiting_for_auth_result = True
             if 'Post your message below' in response_text:
                 return True
 
@@ -129,8 +143,7 @@ class MineChat:
         while True:
             self.sending_queue.put_nowait('')
             await self._reader.readline()
-            this_func_name = sys._getframe().f_code.co_name
-            self.watchdog_queue.put_nowait(this_func_name)
+            self.watchdog_queue.put_nowait(True)
             await asyncio.sleep(2)
 
     async def save_msgs(self) -> NoReturn:
@@ -145,15 +158,13 @@ class MineChat:
             message = message.replace('\n', ' ')
             self._sender.write(f'{message}\n\n'.encode(errors='ignore'))
             await self._sender.drain()
-            this_func_name = sys._getframe().f_code.co_name
-            self.watchdog_queue.put_nowait(this_func_name)
+            self.watchdog_queue.put_nowait(True)
 
     async def watch_for_connection(self):
         while True:
             try:
                 async with asyncio.timeout(3):
-                    source = await self.watchdog_queue.get()
-                    print(f'Connection is alive. Source: {source}')
+                    await self.watchdog_queue.get()
             except TimeoutError:
                 self.status_updates_queue.put_nowait(
                     SendingConnectionStateChanged.CLOSED
