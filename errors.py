@@ -2,6 +2,8 @@ import asyncio
 
 from _socket import gaierror
 
+from anyio import ExceptionGroup
+
 
 class InvalidToken(Exception):
     def __str__(self):
@@ -13,7 +15,7 @@ def retry_on_network_error(func):
         while True:
             try:
                 await func(*args, **kwargs)
-            except (ConnectionError, gaierror):
+            except (ConnectionError, gaierror, ExceptionGroup):
                 await asyncio.sleep(5)
                 continue
     return wrapper

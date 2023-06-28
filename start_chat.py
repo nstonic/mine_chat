@@ -1,9 +1,11 @@
 import argparse
+from _tkinter import TclError
 
 from anyio import run
+from anyio._backends._asyncio import ExceptionGroup
 from environs import Env
 
-import gui
+from gui import draw, TkAppClosed
 from mine_chat import MineChat
 
 
@@ -52,7 +54,12 @@ def main():
         token=args.token,
         history_file=args.history_file
     )
-    run(gui.draw, chat)
+    try:
+        run(draw, chat)
+    except (ExceptionGroup, TclError, KeyboardInterrupt):
+        pass
+    finally:
+        raise TkAppClosed
 
 
 if __name__ == '__main__':
