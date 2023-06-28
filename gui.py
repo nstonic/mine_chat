@@ -1,6 +1,7 @@
 import tkinter as tk
 import asyncio
 from contextlib import suppress
+from functools import partial
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
@@ -42,8 +43,6 @@ async def update_conversation_history(panel, messages_queue, history_filepath):
         if panel.index('end-1c') != '1.0':
             panel.insert('end', '\n')
         panel.insert('end', msg)
-        # ScrolledText.frame
-        # ScrolledText.vbar
         panel.yview(tk.END)
         panel['state'] = 'disabled'
 
@@ -93,10 +92,17 @@ def create_status_panel(root_frame):
     return nickname_label, status_read_label, status_write_label
 
 
+def on_closing(window):
+    window.destroy()
+    raise TkAppClosed
+
+
 async def draw_register_window(chat: MineChat, title: str):
     register_window = tk.Tk()
     register_window.title(title)
     register_window.geometry('500x100')
+    on_closing_func = partial(on_closing, register_window)
+    register_window.protocol('WM_DELETE_WINDOW', on_closing_func)
 
     text_label = ttk.Label(register_window, font='arial 10')
     text_label.pack(expand=True)

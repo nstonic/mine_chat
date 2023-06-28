@@ -47,7 +47,8 @@ class MineChat:
 
     async def register_new_user(self):
         self._token = ''
-        await self.log_on()
+        async with create_task_group() as tg:
+            tg.start_soon(self.log_on)
 
     @property
     def history_file(self):
