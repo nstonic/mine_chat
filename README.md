@@ -16,19 +16,19 @@
 
 ## Как запустить
 
-Все аргументы запуска скриптов можно заменить настройкой в переменных окружения.
+Все аргументы запуска скриптов можно заменить настройкой в переменных окружения. Приоритет при том отдаётся аргументам запуска
 
 ```bash
-python  start_chat.py [-h] [--host HOST] [--reading_port READING_PORT] [--sending_port SENDING_PORT] [--token TOKEN] [--history_file HISTORY_FILE]
+python start_chat.py [-h] [--host HOST] [--reading_port READING_PORT] [--sending_port SENDING_PORT] [--token TOKEN] [--history_file HISTORY_FILE]
 ```
 
 | Аргумент       | Описание                              |         По умолчанию         | Переменная окружения |
 |----------------|---------------------------------------|:----------------------------:|:--------------------:|
-| `host`         | Адрес хоста                           |      minechat.dvmn.org       |         HOST         |
-| `reading_port` | Порт для чтения чата                  |             5000             |     READING_PORT     |
-| `sending_port` | Порт для отправки сообщений           |             5050             |     SENDING_PORT     |
-| `token`        | Ваш токен                             | Будет предложена регистрация |        TOKEN         |
-| `history_file` | Имя файла для сохранения истории чата |         history.txt          |     HISTORY_FILE     |
+| --host         | Адрес хоста                           |      minechat.dvmn.org       |         HOST         |
+| --reading_port | Порт для чтения чата                  |             5000             |     READING_PORT     |
+| --sending_port | Порт для отправки сообщений           |             5050             |     SENDING_PORT     |
+| --token        | Ваш токен                             | Будет предложена регистрация |        TOKEN         |
+| --history_file | Имя файла для сохранения истории чата |         history.txt          |     HISTORY_FILE     |
 
 
 # Цели проекта
