@@ -5,7 +5,8 @@ from anyio import run
 from anyio._backends._asyncio import ExceptionGroup
 from environs import Env
 
-from gui import draw_main, TkAppClosed
+from errors import InvalidToken
+from gui import draw_main, TkAppClosed, draw_register_window
 from mine_chat import MineChat
 
 
@@ -45,6 +46,13 @@ def get_args():
     return args
 
 
+def open_register_window(chat: MineChat, title: str):
+    try:
+        run(draw_register_window, chat, title)
+    except (ExceptionGroup, TclError, KeyboardInterrupt):
+        exit()
+
+
 def main():
     args = get_args()
     chat = MineChat(
@@ -56,10 +64,10 @@ def main():
     )
     try:
         run(draw_main, chat)
+    except InvalidToken as ex:
+        open_register_window(chat, str(ex))
     except (ExceptionGroup, TclError, KeyboardInterrupt):
-        pass
-    finally:
-        raise TkAppClosed
+        exit()
 
 
 if __name__ == '__main__':

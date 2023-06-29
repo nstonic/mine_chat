@@ -46,13 +46,17 @@ class MineChat:
         async with create_task_group() as tg:
             tg.start_soon(self.handle_connection)
 
-    async def register_new_user(self):
+    async def register_new_user(self) -> NoReturn:
         self._token = ''
-        async with create_task_group() as tg:
-            tg.start_soon(self.log_on)
+        self._reader, self._sender = await asyncio.open_connection(self._host, self._sending_port)
+        try:
+            async with create_task_group() as tg:
+                tg.start_soon(self.log_on)
+        finally:
+            await self.close_connections()
 
     @property
-    def history_file(self):
+    def history_file(self) -> str:
         return self._history_file
 
     def check_auth(self, response_text: str) -> Optional[bool]:
@@ -71,14 +75,16 @@ class MineChat:
                 )
                 return True
 
-    async def close_connections(self):
-        self._writer.close()
-        self._sender.close()
-        await self._writer.wait_closed()
-        await self._sender.wait_closed()
+    async def close_connections(self) -> None:
+        with suppress(AttributeError):
+            self._writer.close()
+            await self._writer.wait_closed()
+        with suppress(AttributeError):
+            self._sender.close()
+            await self._sender.wait_closed()
 
     @retry_on_network_error
-    async def handle_connection(self):
+    async def handle_connection(self) -> None:
         self.status_updates_queue.put_nowait(
             ReadConnectionStateChanged.INITIATED
         )
@@ -171,7 +177,7 @@ class MineChat:
         await self._sender.drain()
         self.watchdog_queue.put_nowait(True)
 
-    async def watch_for_connection(self):
+    async def watch_for_connection(self) -> NoReturn:
         while True:
             try:
                 async with asyncio.timeout(3):

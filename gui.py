@@ -1,5 +1,5 @@
 import tkinter as tk
-import asyncio
+from asyncio import sleep
 from contextlib import suppress
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
@@ -8,7 +8,6 @@ import aiofiles
 from anyio import create_task_group
 
 from mine_chat import ReadConnectionStateChanged, SendingConnectionStateChanged, NicknameReceived, MineChat
-from errors import InvalidToken
 
 
 class TkAppClosed(Exception):
@@ -23,11 +22,12 @@ def process_input_text(input_field, sending_queue):
 
 async def update_tk(root_frame, interval=1 / 120):
     while True:
+        root_frame.event_info()
         try:
             root_frame.update()
         except tk.TclError:
             raise TkAppClosed()
-        await asyncio.sleep(interval)
+        await sleep(interval)
 
 
 async def update_conversation_history(panel, messages_queue, history_filepath):
@@ -95,6 +95,7 @@ async def draw_register_window(chat: MineChat, title: str):
     register_window = tk.Tk()
     register_window.title(title)
     register_window.geometry('500x100')
+    register_window.resizable = False
 
     text_label = ttk.Label(register_window, font='arial 10')
     text_label.pack(expand=True)
@@ -102,7 +103,7 @@ async def draw_register_window(chat: MineChat, title: str):
                          'Введите никнейм для регистрации нового пользователя'
 
     nickname_input_frame = tk.Frame(register_window)
-    nickname_input_frame.pack(side='bottom', fill=tk.X)
+    nickname_input_frame.pack(side='bottom', fill=tk.X, pady=10, padx=10)
     nickname_input_field = tk.Entry(nickname_input_frame)
     nickname_input_field.pack(side='left', fill=tk.X, expand=True)
     nickname_input_field.bind('<Return>', lambda event: process_input_text(nickname_input_field, chat.nickname_queue))
@@ -110,7 +111,9 @@ async def draw_register_window(chat: MineChat, title: str):
     send_button['text'] = 'Отправить'
     send_button['command'] = lambda: process_input_text(nickname_input_field, chat.nickname_queue)
     send_button.pack(side='left')
+
     async with create_task_group() as tg:
+        tg.start_soon(chat.register_new_user)
         tg.start_soon(update_tk, register_window)
         tg.start_soon(update_label, text_label, nickname_input_field, chat.show_token_queue)
 
@@ -147,8 +150,5 @@ async def draw_main(chat: MineChat):
             tg.start_soon(update_tk, root_frame)
             tg.start_soon(update_conversation_history, conversation_panel, chat.messages_queue, chat.history_file)
             tg.start_soon(update_status_panel, status_labels, chat.status_updates_queue)
-    except InvalidToken as ex:
+    finally:
         root.destroy()
-        async with create_task_group() as tg:
-            tg.start_soon(chat.register_new_user)
-            tg.start_soon(draw_register_window, chat, str(ex))
