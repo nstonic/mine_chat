@@ -127,22 +127,22 @@ class MineChat:
     async def log_on(self) -> bool:
         if self._token is None:
             raise InvalidToken('Отсутствует токен')
-        waiting_for_auth_result = False
+        expecting_auth_data = False
         while True:
             response = await self._reader.readline()
             response_text = response.decode(errors='ignore')
             self.status_updates_queue.put_nowait(
                 SendingConnectionStateChanged.ESTABLISHED
             )
-            if waiting_for_auth_result:
+            if expecting_auth_data:
                 if self.check_auth(response_text):
-                    waiting_for_auth_result = False
+                    expecting_auth_data = False
             if 'Enter your personal hash' in response_text:
                 await self.send_token()
-                waiting_for_auth_result = True
+                expecting_auth_data = True
             if 'Enter preferred nickname below' in response_text:
                 await self.send_nickname()
-                waiting_for_auth_result = True
+                expecting_auth_data = True
             if 'Post your message below' in response_text:
                 return True
 
