@@ -6,7 +6,7 @@ from anyio._backends._asyncio import ExceptionGroup
 from environs import Env
 
 from errors import InvalidToken
-from gui import draw_main, TkAppClosed, draw_register_window
+from gui import draw_main, draw_register_window
 from mine_chat import MineChat
 
 
