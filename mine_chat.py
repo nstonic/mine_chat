@@ -38,8 +38,9 @@ class MineChat:
         self.watchdog_queue = asyncio.Queue()
 
         self._listener: Optional[StreamReader] = None
-        self._reader: Optional[StreamReader] = None
         self._sender: Optional[StreamWriter] = None
+        self._reader: Optional[StreamReader] = None
+        self._writer: Optional[StreamWriter] = None
 
     async def run(self) -> NoReturn:
         async with create_task_group() as tg:
@@ -53,16 +54,6 @@ class MineChat:
     @property
     def history_file(self):
         return self._history_file
-
-    async def send_nickname(self) -> None:
-        nickname = await self.nickname_queue.get()
-        self._sender.write(f'{nickname}\n'.encode(errors='ignore'))
-        await self._sender.drain()
-
-    async def authorise(self) -> None:
-        self._sender.write(f'{self._token}\n'.encode(errors='ignore'))
-        await self._sender.drain()
-        self.watchdog_queue.put_nowait(True)
 
     def check_auth(self, response_text: str) -> Optional[bool]:
         with suppress(JSONDecodeError):
@@ -80,6 +71,12 @@ class MineChat:
                 )
                 return True
 
+    async def close_connections(self):
+        self._writer.close()
+        self._sender.close()
+        await self._writer.wait_closed()
+        await self._sender.wait_closed()
+
     @retry_on_network_error
     async def handle_connection(self):
         self.status_updates_queue.put_nowait(
@@ -88,19 +85,22 @@ class MineChat:
         self.status_updates_queue.put_nowait(
             SendingConnectionStateChanged.INITIATED
         )
-        self._listener, _ = await asyncio.open_connection(self._host, self._listening_port)
+        self._listener, self._writer = await asyncio.open_connection(self._host, self._listening_port)
         self._reader, self._sender = await asyncio.open_connection(self._host, self._sending_port)
 
-        if await self.log_on():
-            self.status_updates_queue.put_nowait(
-                SendingConnectionStateChanged.ESTABLISHED
-            )
-            async with create_task_group() as tg:
-                tg.start_soon(self.listen_chat)
-                tg.start_soon(self.save_msgs)
-                tg.start_soon(self.send_msgs)
-                tg.start_soon(self.ping_pong)
-                tg.start_soon(self.watch_for_connection)
+        try:
+            if await self.log_on():
+                self.status_updates_queue.put_nowait(
+                    SendingConnectionStateChanged.ESTABLISHED
+                )
+                async with create_task_group() as tg:
+                    tg.start_soon(self.listen_chat)
+                    tg.start_soon(self.save_msgs)
+                    tg.start_soon(self.send_msgs)
+                    tg.start_soon(self.ping_pong)
+                    tg.start_soon(self.watch_for_connection)
+        finally:
+            await self.close_connections()
 
     async def listen_chat(self) -> NoReturn:
         while True:
@@ -132,7 +132,7 @@ class MineChat:
                 if self.check_auth(response_text):
                     waiting_for_auth_result = False
             if 'Enter your personal hash' in response_text:
-                await self.authorise()
+                await self.send_token()
                 waiting_for_auth_result = True
             if 'Enter preferred nickname below' in response_text:
                 await self.send_nickname()
@@ -160,6 +160,16 @@ class MineChat:
             self._sender.write(f'{message}\n\n'.encode(errors='ignore'))
             await self._sender.drain()
             self.watchdog_queue.put_nowait(True)
+
+    async def send_nickname(self) -> None:
+        nickname = await self.nickname_queue.get()
+        self._sender.write(f'{nickname}\n'.encode(errors='ignore'))
+        await self._sender.drain()
+
+    async def send_token(self) -> None:
+        self._sender.write(f'{self._token}\n'.encode(errors='ignore'))
+        await self._sender.drain()
+        self.watchdog_queue.put_nowait(True)
 
     async def watch_for_connection(self):
         while True:
