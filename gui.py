@@ -124,7 +124,7 @@ async def draw_main(chat: MineChat):
     root.title('Чат Майнкрафтера')
 
     root_frame = tk.Frame()
-    root_frame.pack(fill='both', expand=True)
+    root_frame.pack(fill='both', expand=True, pady=5, padx=5)
 
     status_labels = create_status_panel(root_frame)
 
@@ -139,7 +139,7 @@ async def draw_main(chat: MineChat):
     send_button = tk.Button(msg_input_frame)
     send_button['text'] = 'Отправить'
     send_button['command'] = lambda: process_input_text(msg_input_field, chat.sending_queue)
-    send_button.pack(side='left')
+    send_button.pack(side='left', pady=5, padx=5)
 
     conversation_panel = ScrolledText(root_frame, wrap='none')
     conversation_panel.pack(side='top', fill='both', expand=True)
